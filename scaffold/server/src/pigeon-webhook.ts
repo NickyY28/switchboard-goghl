@@ -73,7 +73,7 @@ async function saveInbound(
         contact,
         assignee: null,
         state: "open",
-        unreadCount: 0,
+        ...(inserted ? {} : { unreadCount: 0 }),
         priority: false,
         createdAt: occurredAt,
       },

@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer } from "node:http";
 import { config } from "./config.js";
+import graderRouter from "./grader.js";
 import { pigeonWebhook } from "./pigeon-webhook.js";
 import { initializeStore } from "./store.js";
 
@@ -17,6 +18,7 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/healthz", (_req, res) => {
   res.status(ready ? 200 : 503).json({ ok: ready });
 });
+app.use("/__grader", graderRouter);
 
 // Everything else is yours.
 
