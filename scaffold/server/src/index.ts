@@ -1,10 +1,18 @@
 import express from "express";
 import { createServer } from "node:http";
 import { config } from "./config.js";
+import { pigeonWebhook } from "./pigeon-webhook.js";
 import { initializeStore } from "./store.js";
 
 const app = express();
 let ready = false;
+
+app.post(
+  "/webhooks/pigeon",
+  express.raw({ type: "application/json", limit: "1mb" }),
+  pigeonWebhook,
+);
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/healthz", (_req, res) => {
   res.status(ready ? 200 : 503).json({ ok: ready });
