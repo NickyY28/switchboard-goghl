@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { Router, type RequestHandler } from "express";
 import { config } from "./config.js";
 import { getDb } from "./db.js";
+import { enqueueReply } from "./outbox.js";
 import { ensureConversation, resetStore, workspaceIds } from "./store.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -114,6 +115,29 @@ router.post("/claim", async (req, res, next) => {
 
     const current = await db.collection("conversations").findOne({ workspace, contact });
     res.sendStatus(current?.assignee === agent ? 200 : 409);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/reply", async (req, res, next) => {
+  const { workspace, contact, text, client_ref: clientRef } = isRecord(req.body) ? req.body : {};
+  if (
+    !validWorkspace(workspace) ||
+    typeof contact !== "string" ||
+    !contact ||
+    typeof text !== "string" ||
+    !text.trim() ||
+    typeof clientRef !== "string" ||
+    !clientRef
+  ) {
+    res.sendStatus(400);
+    return;
+  }
+
+  try {
+    await enqueueReply(workspace, contact, text, clientRef);
+    res.sendStatus(202);
   } catch (error) {
     next(error);
   }
