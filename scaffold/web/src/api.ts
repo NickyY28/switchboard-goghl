@@ -13,7 +13,7 @@ export type Message = {
   text: string;
   direction: 'inbound' | 'outbound';
   createdAt: string;
-  status: 'queued' | 'sent' | 'delivered' | 'failed' | null;
+  status: 'received' | 'queued' | 'sent' | 'delivered' | 'failed' | null;
   clientRef?: string | null;
 };
 

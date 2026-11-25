@@ -96,6 +96,12 @@ export function App() {
   const [socketConnected, setSocketConnected] = useState(false);
   const lastSeq = useRef(0);
   const selectedContactRef = useRef(selectedContact);
+  const pendingReplyRef = useRef<{
+    workspace: string;
+    contact: string;
+    text: string;
+    clientRef: string;
+  } | null>(null);
 
   useEffect(() => {
     selectedContactRef.current = selectedContact;
@@ -201,21 +207,33 @@ export function App() {
     let socket: WebSocket | undefined;
     let reconnectTimer: number | undefined;
     let stopped = false;
+    let hasConnected = false;
     let retryDelay = 500;
 
     const connect = () => {
       if (stopped) return;
       const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const query = new URLSearchParams({ workspace: workspaceId });
-      if (lastSeq.current > 0) query.set('after', String(lastSeq.current));
-      socket = new WebSocket(`${scheme}//${window.location.host}/ws?${query}`);
+      if (hasConnected) query.set('after', String(lastSeq.current));
+      const connection = new WebSocket(`${scheme}//${window.location.host}/ws?${query}`);
+      socket = connection;
 
-      socket.addEventListener('open', () => {
+      connection.addEventListener('open', () => {
+        hasConnected = true;
         retryDelay = 500;
         setSocketConnected(true);
+        void refreshConversations(workspaceId).catch((error: unknown) =>
+          setConversationError(errorText(error)),
+        );
+        const contact = selectedContactRef.current;
+        if (contact) {
+          void refreshMessages(workspaceId, contact).catch((error: unknown) =>
+            setMessagesError(errorText(error)),
+          );
+        }
       });
 
-      socket.addEventListener('message', (event) => {
+      connection.addEventListener('message', (event) => {
         try {
           const frame = JSON.parse(String(event.data)) as { seq?: number; type?: string };
           if (typeof frame.seq !== 'number' || frame.seq <= lastSeq.current) return;
@@ -234,7 +252,7 @@ export function App() {
         }
       });
 
-      socket.addEventListener('close', () => {
+      connection.addEventListener('close', () => {
         setSocketConnected(false);
         if (!stopped) {
           reconnectTimer = window.setTimeout(connect, retryDelay);
@@ -242,7 +260,7 @@ export function App() {
         }
       });
 
-      socket.addEventListener('error', () => socket?.close());
+      connection.addEventListener('error', () => connection.close());
     };
 
     connect();
@@ -343,10 +361,23 @@ export function App() {
     setReplying(true);
     setActionError('');
     setActionNotice('');
-    const clientRef = globalThis.crypto?.randomUUID?.() ??
-      `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const pending = pendingReplyRef.current;
+    const clientRef =
+      pending?.workspace === workspaceId &&
+      pending.contact === activeConversation.contact &&
+      pending.text === text
+        ? pending.clientRef
+        : globalThis.crypto?.randomUUID?.() ??
+          `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    pendingReplyRef.current = {
+      workspace: workspaceId,
+      contact: activeConversation.contact,
+      text,
+      clientRef,
+    };
     try {
       await sendReply(workspaceId, activeConversation.contact, text, clientRef);
+      pendingReplyRef.current = null;
       setReplyText('');
       setActionNotice('Reply queued.');
       await refreshMessages(workspaceId, activeConversation.contact);
