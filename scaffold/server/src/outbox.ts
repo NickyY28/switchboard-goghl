@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ObjectId } from "mongodb";
 import { getDb } from "./db.js";
 import { config } from "./config.js";
+import { getRedis } from "./redis.js";
 import { ensureConversation, workspaceIds } from "./store.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -80,6 +81,19 @@ async function attemptSend(
     return;
   }
 
+  const retryKey = `pigeon:retry-after:${message.workspace}`;
+  const retryUntil = Number(await getRedis().get(retryKey));
+  if (Number.isFinite(retryUntil) && retryUntil > Date.now()) {
+    await db.collection("messages").updateOne(
+      { _id: message._id, leaseOwner: workerId, status: "queued" },
+      {
+        $set: { nextAttemptAt: new Date(retryUntil) },
+        $unset: { leaseOwner: "", leaseUntil: "" },
+      },
+    );
+    return;
+  }
+
   let response: Response;
   try {
     response = await fetch(`${config.pigeon.url}/v1/messages`, {
@@ -115,6 +129,9 @@ async function attemptSend(
     const delay = Number.isFinite(retryAfter) && retryAfter > 0
       ? Math.ceil(retryAfter * 1000)
       : Math.min(30_000, 500 * 2 ** Math.min(attempts, 6));
+    if (response.status === 429) {
+      await getRedis().set(retryKey, String(Date.now() + delay), "PX", delay);
+    }
     await db.collection("messages").updateOne(
       { _id: message._id, leaseOwner: workerId, status: "queued" },
       {
