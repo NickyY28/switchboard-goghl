@@ -1,10 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type RequestHandler } from "express";
-import { config } from "./config.js";
-import { getDb } from "./db.js";
-import { enqueueReply } from "./outbox.js";
-import { publishWorkspaceEvent } from "./realtime.js";
-import { claimConversation, resetStore, workspaceIds } from "./store.js";
+import { config } from "../../config/env.js";
+import { getDb } from "../../config/database.js";
+import { enqueueReply } from "../messaging/outbox.worker.js";
+import { publishWorkspaceEvent } from "../realtime/realtime.service.js";
+import { claimConversation, resetStore, workspaceIds } from "../conversations/conversations.store.js";
 
 type JsonRecord = Record<string, unknown>;
 

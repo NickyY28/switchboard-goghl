@@ -5,8 +5,8 @@ import {
   verify,
 } from "node:crypto";
 import { Router, type Request, type RequestHandler } from "express";
-import { config } from "./config.js";
-import { getRedis } from "./redis.js";
+import { config } from "../../config/env.js";
+import { getRedis } from "../../config/redis.js";
 
 type JsonRecord = Record<string, unknown>;
 

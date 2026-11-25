@@ -1,8 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { RequestHandler } from "express";
-import { config } from "./config.js";
-import { getDb } from "./db.js";
-import { publishWorkspaceEvent } from "./realtime.js";
+import { config } from "../../config/env.js";
+import { getDb } from "../../config/database.js";
+import { publishWorkspaceEvent } from "../realtime/realtime.service.js";
 
 type JsonRecord = Record<string, unknown>;
 

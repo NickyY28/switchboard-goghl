@@ -1,7 +1,7 @@
 // Every setting comes from the environment. The defaults match the harness,
-// so this runs with no .env file. If ../../.env exists it is loaded first.
+// so this runs with no .env file. If the repository-root .env exists it is loaded first.
 try {
-  process.loadEnvFile(new URL('../../../.env', import.meta.url));
+  process.loadEnvFile(new URL('../../../../.env', import.meta.url));
 } catch {
   // no .env file: defaults apply
 }

@@ -1,7 +1,7 @@
-import { getDb } from "./db.js";
+import { getDb } from "../../config/database.js";
 import type { Db } from "mongodb";
-import { config } from "./config.js";
-import { getRedis } from "./redis.js";
+import { config } from "../../config/env.js";
+import { getRedis } from "../../config/redis.js";
 
 export const workspaceIds = Object.keys(config.pigeon.apiKeys);
 
@@ -50,33 +50,6 @@ export async function claimConversation(
   if (result.matchedCount > 0) return true;
   const current = await db.collection("conversations").findOne({ workspace, contact });
   return current?.assignee === agent;
-}
-
-export async function initializeStore(): Promise<void> {
-  const db = await getDb();
-
-  await Promise.all([
-    db.collection("conversations").createIndex(
-      { workspace: 1, contact: 1 },
-      { unique: true },
-    ),
-    db.collection("messages").createIndex(
-      { workspace: 1, providerMessageId: 1 },
-      {
-        unique: true,
-        partialFilterExpression: { direction: "inbound", providerMessageId: { $type: "string" } },
-      },
-    ),
-    db.collection("messages").createIndex(
-      { workspace: 1, clientRef: 1 },
-      {
-        unique: true,
-        partialFilterExpression: { direction: "outbound", clientRef: { $type: "string" } },
-      },
-    ),
-    db.collection("webhook_events").createIndex({ eventId: 1 }, { unique: true }),
-    db.collection("messages").createIndex({ workspace: 1, status: 1, nextAttemptAt: 1 }),
-  ]);
 }
 
 export async function resetStore(): Promise<void> {

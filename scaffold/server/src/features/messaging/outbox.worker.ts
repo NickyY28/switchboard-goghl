@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { ObjectId } from "mongodb";
-import { getDb } from "./db.js";
-import { config } from "./config.js";
-import { getRedis } from "./redis.js";
-import { publishWorkspaceEvent } from "./realtime.js";
-import { ensureConversation, workspaceIds } from "./store.js";
+import { getDb } from "../../config/database.js";
+import { config } from "../../config/env.js";
+import { getRedis } from "../../config/redis.js";
+import { publishWorkspaceEvent } from "../realtime/realtime.service.js";
+import { ensureConversation, workspaceIds } from "../conversations/conversations.store.js";
 
 type JsonRecord = Record<string, unknown>;
 

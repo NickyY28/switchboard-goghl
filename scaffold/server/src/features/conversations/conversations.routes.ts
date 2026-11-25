@@ -1,9 +1,9 @@
 import { Router, type Request, type Response } from "express";
-import { getSession, hasWorkspace } from "./auth.js";
-import { getDb } from "./db.js";
-import { enqueueReply } from "./outbox.js";
-import { publishWorkspaceEvent } from "./realtime.js";
-import { claimConversation, workspaceIds } from "./store.js";
+import { getSession, hasWorkspace } from "../auth/auth.routes.js";
+import { getDb } from "../../config/database.js";
+import { enqueueReply } from "../messaging/outbox.worker.js";
+import { publishWorkspaceEvent } from "../realtime/realtime.service.js";
+import { claimConversation, workspaceIds } from "./conversations.store.js";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -32,9 +32,9 @@ async function authorizeWorkspace(
   return { session, workspace };
 }
 
-export const apiRouter = Router();
+export const conversationsRouter = Router();
 
-apiRouter.get("/me", async (req, res, next) => {
+conversationsRouter.get("/me", async (req, res, next) => {
   try {
     const session = await getSession(req);
     if (!session) {
@@ -47,7 +47,7 @@ apiRouter.get("/me", async (req, res, next) => {
   }
 });
 
-apiRouter.get("/conversations", async (req, res, next) => {
+conversationsRouter.get("/conversations", async (req, res, next) => {
   try {
     const access = await authorizeWorkspace(req, res, req.query.workspace);
     if (!access) return;
@@ -78,7 +78,7 @@ apiRouter.get("/conversations", async (req, res, next) => {
   }
 });
 
-apiRouter.get("/conversations/:contact/messages", async (req, res, next) => {
+conversationsRouter.get("/conversations/:contact/messages", async (req, res, next) => {
   try {
     const access = await authorizeWorkspace(req, res, req.query.workspace);
     if (!access) return;
@@ -102,7 +102,7 @@ apiRouter.get("/conversations/:contact/messages", async (req, res, next) => {
   }
 });
 
-apiRouter.post("/replies", async (req, res, next) => {
+conversationsRouter.post("/replies", async (req, res, next) => {
   const { workspace, contact, text, client_ref: clientRef } = isRecord(req.body) ? req.body : {};
   try {
     const access = await authorizeWorkspace(req, res, workspace);
@@ -132,7 +132,7 @@ apiRouter.post("/replies", async (req, res, next) => {
   }
 });
 
-apiRouter.post("/conversations/:contact/claim", async (req, res, next) => {
+conversationsRouter.post("/conversations/:contact/claim", async (req, res, next) => {
   const workspace = isRecord(req.body) ? req.body.workspace : undefined;
   try {
     const access = await authorizeWorkspace(req, res, workspace);
@@ -156,7 +156,7 @@ apiRouter.post("/conversations/:contact/claim", async (req, res, next) => {
   }
 });
 
-apiRouter.post("/conversations/:contact/read", async (req, res, next) => {
+conversationsRouter.post("/conversations/:contact/read", async (req, res, next) => {
   const workspace = isRecord(req.body) ? req.body.workspace : undefined;
   try {
     const access = await authorizeWorkspace(req, res, workspace);
@@ -176,7 +176,7 @@ apiRouter.post("/conversations/:contact/read", async (req, res, next) => {
   }
 });
 
-apiRouter.patch("/conversations/:contact/priority", async (req, res, next) => {
+conversationsRouter.patch("/conversations/:contact/priority", async (req, res, next) => {
   const workspace = isRecord(req.body) ? req.body.workspace : undefined;
   const priority = isRecord(req.body) ? req.body.priority : undefined;
   try {
@@ -203,7 +203,7 @@ apiRouter.patch("/conversations/:contact/priority", async (req, res, next) => {
   }
 });
 
-apiRouter.patch("/conversations/:contact/state", async (req, res, next) => {
+conversationsRouter.patch("/conversations/:contact/state", async (req, res, next) => {
   const workspace = isRecord(req.body) ? req.body.workspace : undefined;
   const state = isRecord(req.body) ? req.body.state : undefined;
   try {

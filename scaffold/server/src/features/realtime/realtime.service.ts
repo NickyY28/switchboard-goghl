@@ -1,9 +1,9 @@
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { getSessionFromCookie, hasWorkspace } from "./auth.js";
-import { getRedis } from "./redis.js";
-import { workspaceIds } from "./store.js";
+import { getSessionFromCookie, hasWorkspace } from "../auth/auth.routes.js";
+import { getRedis } from "../../config/redis.js";
+import { workspaceIds } from "../conversations/conversations.store.js";
 
 type EventFrame = Record<string, unknown> & { seq: number };
 type ClientState = {
