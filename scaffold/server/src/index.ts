@@ -1,17 +1,28 @@
-import express from 'express';
-import { createServer } from 'node:http';
-import { config } from './config.js';
+import express from "express";
+import { createServer } from "node:http";
+import { config } from "./config.js";
+import { initializeStore } from "./store.js";
 
 const app = express();
+let ready = false;
 
-app.get('/healthz', (_req, res) => {
-  res.json({ ok: true });
+app.get("/healthz", (_req, res) => {
+  res.status(ready ? 200 : 503).json({ ok: ready });
 });
 
 // Everything else is yours.
 
-// A plain http server, so you can attach WebSockets to it.
 const server = createServer(app);
-server.listen(config.port, () => {
-  console.log(`server on http://localhost:${config.port}`);
+
+async function start(): Promise<void> {
+  await initializeStore();
+  server.listen(config.port, () => {
+    ready = true;
+    console.log(`server on http://localhost:${config.port}`);
+  });
+}
+
+start().catch((error: unknown) => {
+  console.error("server startup failed", error);
+  process.exitCode = 1;
 });
