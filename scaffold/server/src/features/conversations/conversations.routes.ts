@@ -65,6 +65,21 @@ conversationsRouter.get("/conversations", async (req, res, next) => {
       .sort({ lastActivityAt: -1, createdAt: -1 })
       .limit(100)
       .toArray();
+    const latestMessages = conversations.length
+      ? await (await getDb()).collection("messages").aggregate([
+          {
+            $match: {
+              workspace: access.workspace,
+              contact: { $in: conversations.map((conversation) => conversation.contact) },
+            },
+          },
+          { $sort: { createdAt: -1, _id: -1 } },
+          { $group: { _id: "$contact", message: { $first: "$$ROOT" } } },
+        ]).toArray()
+      : [];
+    const latestByContact = new Map(
+      latestMessages.map((entry) => [entry._id, entry.message]),
+    );
     res.json(conversations.map((conversation) => ({
       contact: conversation.contact,
       assignee: conversation.assignee ?? null,
@@ -72,6 +87,16 @@ conversationsRouter.get("/conversations", async (req, res, next) => {
       unreadCount: conversation.unreadCount ?? 0,
       priority: conversation.priority ?? false,
       lastActivityAt: conversation.lastActivityAt ?? conversation.createdAt,
+      lastMessage: (() => {
+        const message = latestByContact.get(conversation.contact);
+        if (!message) return null;
+        return {
+          id: message.providerMessageId ?? message.clientRef,
+          text: message.text,
+          direction: message.direction,
+          createdAt: message.createdAt,
+        };
+      })(),
     })));
   } catch (error) {
     next(error);

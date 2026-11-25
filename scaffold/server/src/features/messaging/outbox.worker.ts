@@ -35,6 +35,7 @@ export async function enqueueReply(
   const now = new Date();
   await ensureConversation(db, workspace, contact);
 
+  let inserted = true;
   try {
     await db.collection("messages").insertOne({
       workspace,
@@ -49,6 +50,14 @@ export async function enqueueReply(
     });
   } catch (error) {
     if (!isDuplicateKey(error)) throw error;
+    inserted = false;
+  }
+
+  if (inserted) {
+    await db.collection("conversations").updateOne(
+      { workspace, contact },
+      { $max: { lastActivityAt: now }, $set: { updatedAt: now } },
+    );
   }
 }
 

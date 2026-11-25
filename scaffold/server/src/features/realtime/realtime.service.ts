@@ -86,8 +86,8 @@ async function handleUpgrade(
     return;
   }
   const afterValue = url.searchParams.get("after");
-  const after = afterValue === null ? 0 : Number(afterValue);
-  if (!Number.isSafeInteger(after) || after < 0) {
+  let after = afterValue === null ? undefined : Number(afterValue);
+  if (after !== undefined && (!Number.isSafeInteger(after) || after < 0)) {
     rejectUpgrade(socket, 400);
     return;
   }
@@ -100,6 +100,11 @@ async function handleUpgrade(
   if (!hasWorkspace(session, workspace)) {
     rejectUpgrade(socket, 403);
     return;
+  }
+
+  if (after === undefined) {
+    const currentSequence = await getRedis().get(keys(workspace).sequence);
+    after = currentSequence === null ? 0 : Number(currentSequence);
   }
 
   webSocketServer.handleUpgrade(request, socket, head, (clientSocket) => {
