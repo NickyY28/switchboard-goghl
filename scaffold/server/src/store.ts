@@ -36,6 +36,22 @@ export async function ensureConversation(
   }
 }
 
+export async function claimConversation(
+  db: Db,
+  workspace: string,
+  contact: string,
+  agent: string,
+): Promise<boolean> {
+  await ensureConversation(db, workspace, contact);
+  const result = await db.collection("conversations").updateOne(
+    { workspace, contact, $or: [{ assignee: null }, { assignee: agent }] },
+    { $set: { assignee: agent, updatedAt: new Date() } },
+  );
+  if (result.matchedCount > 0) return true;
+  const current = await db.collection("conversations").findOne({ workspace, contact });
+  return current?.assignee === agent;
+}
+
 export async function initializeStore(): Promise<void> {
   const db = await getDb();
 

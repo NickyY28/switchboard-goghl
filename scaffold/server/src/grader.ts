@@ -3,7 +3,7 @@ import { Router, type RequestHandler } from "express";
 import { config } from "./config.js";
 import { getDb } from "./db.js";
 import { enqueueReply } from "./outbox.js";
-import { ensureConversation, resetStore, workspaceIds } from "./store.js";
+import { claimConversation, resetStore, workspaceIds } from "./store.js";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -102,19 +102,8 @@ router.post("/claim", async (req, res, next) => {
 
   try {
     const db = await getDb();
-    await ensureConversation(db, workspace, contact);
-    const result = await db.collection("conversations").updateOne(
-      { workspace, contact, $or: [{ assignee: null }, { assignee: agent }] },
-      { $set: { assignee: agent, updatedAt: new Date() } },
-    );
-
-    if (result.matchedCount > 0) {
-      res.sendStatus(200);
-      return;
-    }
-
-    const current = await db.collection("conversations").findOne({ workspace, contact });
-    res.sendStatus(current?.assignee === agent ? 200 : 409);
+    const claimed = await claimConversation(db, workspace, contact, agent);
+    res.sendStatus(claimed ? 200 : 409);
   } catch (error) {
     next(error);
   }
