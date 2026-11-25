@@ -3,6 +3,7 @@ import { Router, type RequestHandler } from "express";
 import { config } from "./config.js";
 import { getDb } from "./db.js";
 import { enqueueReply } from "./outbox.js";
+import { publishWorkspaceEvent } from "./realtime.js";
 import { claimConversation, resetStore, workspaceIds } from "./store.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -103,6 +104,13 @@ router.post("/claim", async (req, res, next) => {
   try {
     const db = await getDb();
     const claimed = await claimConversation(db, workspace, contact, agent);
+    if (claimed) {
+      await publishWorkspaceEvent(workspace, {
+        type: "conversation.assigned",
+        contact,
+        assignee: agent,
+      });
+    }
     res.sendStatus(claimed ? 200 : 409);
   } catch (error) {
     next(error);
@@ -126,6 +134,12 @@ router.post("/reply", async (req, res, next) => {
 
   try {
     await enqueueReply(workspace, contact, text, clientRef);
+    await publishWorkspaceEvent(workspace, {
+      type: "message.status",
+      contact,
+      client_ref: clientRef,
+      status: "queued",
+    });
     res.sendStatus(202);
   } catch (error) {
     next(error);

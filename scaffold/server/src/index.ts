@@ -6,6 +6,7 @@ import { config } from "./config.js";
 import graderRouter from "./grader.js";
 import { startOutboxWorker } from "./outbox.js";
 import { pigeonWebhook } from "./pigeon-webhook.js";
+import { startRealtime } from "./realtime.js";
 import { initializeStore } from "./store.js";
 
 const app = express();
@@ -44,6 +45,7 @@ const server = createServer(app);
 
 async function start(): Promise<void> {
   await initializeStore();
+  await startRealtime(server);
   startOutboxWorker();
   server.listen(config.port, () => {
     ready = true;

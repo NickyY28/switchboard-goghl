@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { getSession, hasWorkspace } from "./auth.js";
 import { getDb } from "./db.js";
 import { enqueueReply } from "./outbox.js";
+import { publishWorkspaceEvent } from "./realtime.js";
 import { claimConversation, workspaceIds } from "./store.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -119,6 +120,12 @@ apiRouter.post("/replies", async (req, res, next) => {
     }
 
     await enqueueReply(access.workspace, contact, text, clientRef);
+    await publishWorkspaceEvent(access.workspace, {
+      type: "message.status",
+      contact,
+      client_ref: clientRef,
+      status: "queued",
+    });
     res.sendStatus(202);
   } catch (error) {
     next(error);
@@ -136,6 +143,13 @@ apiRouter.post("/conversations/:contact/claim", async (req, res, next) => {
       req.params.contact,
       access.session.sub,
     );
+    if (claimed) {
+      await publishWorkspaceEvent(access.workspace, {
+        type: "conversation.assigned",
+        contact: req.params.contact,
+        assignee: access.session.sub,
+      });
+    }
     res.sendStatus(claimed ? 200 : 409);
   } catch (error) {
     next(error);
@@ -151,6 +165,11 @@ apiRouter.post("/conversations/:contact/read", async (req, res, next) => {
       { workspace: access.workspace, contact: req.params.contact },
       { $set: { unreadCount: 0, updatedAt: new Date() } },
     );
+    await publishWorkspaceEvent(access.workspace, {
+      type: "conversation.read",
+      contact: req.params.contact,
+      agent: access.session.sub,
+    });
     res.sendStatus(200);
   } catch (error) {
     next(error);
@@ -171,6 +190,13 @@ apiRouter.patch("/conversations/:contact/priority", async (req, res, next) => {
       { workspace: access.workspace, contact: req.params.contact },
       { $set: { priority, updatedAt: new Date() } },
     );
+    if (result.matchedCount) {
+      await publishWorkspaceEvent(access.workspace, {
+        type: "conversation.priority",
+        contact: req.params.contact,
+        priority,
+      });
+    }
     res.sendStatus(result.matchedCount ? 200 : 404);
   } catch (error) {
     next(error);
@@ -191,6 +217,13 @@ apiRouter.patch("/conversations/:contact/state", async (req, res, next) => {
       { workspace: access.workspace, contact: req.params.contact },
       { $set: { state, updatedAt: new Date() } },
     );
+    if (result.matchedCount) {
+      await publishWorkspaceEvent(access.workspace, {
+        type: "conversation.updated",
+        contact: req.params.contact,
+        state,
+      });
+    }
     res.sendStatus(result.matchedCount ? 200 : 404);
   } catch (error) {
     next(error);

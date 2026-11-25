@@ -25,8 +25,7 @@ function randomToken(): string {
   return base64Url(randomBytes(32));
 }
 
-function cookieValue(req: Request, name: string): string | undefined {
-  const cookie = req.headers.cookie;
+function cookieValue(cookie: string | undefined, name: string): string | undefined {
   if (!cookie) return undefined;
   for (const part of cookie.split(";")) {
     const [key, ...value] = part.trim().split("=");
@@ -36,7 +35,11 @@ function cookieValue(req: Request, name: string): string | undefined {
 }
 
 export async function getSession(req: Request): Promise<Session | null> {
-  const id = cookieValue(req, "switchboard_session");
+  return getSessionFromCookie(req.headers.cookie);
+}
+
+export async function getSessionFromCookie(cookie: string | undefined): Promise<Session | null> {
+  const id = cookieValue(cookie, "switchboard_session");
   if (!id) return null;
   const stored = await getRedis().get(`switchboard:session:${id}`);
   if (!stored) return null;

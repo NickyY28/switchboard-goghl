@@ -3,6 +3,7 @@ import type { ObjectId } from "mongodb";
 import { getDb } from "./db.js";
 import { config } from "./config.js";
 import { getRedis } from "./redis.js";
+import { publishWorkspaceEvent } from "./realtime.js";
 import { ensureConversation, workspaceIds } from "./store.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -74,10 +75,18 @@ async function attemptSend(
 
   const apiKey = config.pigeon.apiKeys[message.workspace];
   if (!apiKey || !workspaceIds.includes(message.workspace)) {
-    await db.collection("messages").updateOne(
+    const failed = await db.collection("messages").updateOne(
       { _id: message._id, leaseOwner: workerId, status: "queued" },
       { $set: { status: "failed", failure: "Unknown workspace" }, $unset: { leaseOwner: "", leaseUntil: "" } },
     );
+    if (failed.modifiedCount) {
+      await publishWorkspaceEvent(message.workspace, {
+        type: "message.status",
+        contact: message.contact,
+        client_ref: message.clientRef,
+        status: "failed",
+      });
+    }
     return;
   }
 
@@ -143,19 +152,27 @@ async function attemptSend(
   }
 
   if (!response.ok) {
-    await db.collection("messages").updateOne(
+    const failed = await db.collection("messages").updateOne(
       { _id: message._id, leaseOwner: workerId, status: "queued" },
       {
         $set: { status: "failed", failure: `Pigeon ${response.status}` },
         $unset: { leaseOwner: "", leaseUntil: "" },
       },
     );
+    if (failed.modifiedCount) {
+      await publishWorkspaceEvent(message.workspace, {
+        type: "message.status",
+        contact: message.contact,
+        client_ref: message.clientRef,
+        status: "failed",
+      });
+    }
     return;
   }
 
   const result: unknown = await response.json();
   const providerMessageId = isRecord(result) && typeof result.id === "string" ? result.id : undefined;
-  await db.collection("messages").updateOne(
+  const sent = await db.collection("messages").updateOne(
     { _id: message._id, leaseOwner: workerId, status: "queued" },
     {
       $set: {
@@ -166,6 +183,14 @@ async function attemptSend(
       $unset: { leaseOwner: "", leaseUntil: "", lastError: "" },
     },
   );
+  if (sent.modifiedCount) {
+    await publishWorkspaceEvent(message.workspace, {
+      type: "message.status",
+      contact: message.contact,
+      client_ref: message.clientRef,
+      status: "sent",
+    });
+  }
 }
 
 export function startOutboxWorker(): void {

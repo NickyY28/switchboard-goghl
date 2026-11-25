@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { RequestHandler } from "express";
 import { config } from "./config.js";
 import { getDb } from "./db.js";
+import { publishWorkspaceEvent } from "./realtime.js";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -36,7 +37,7 @@ async function saveInbound(
   eventId: string,
   occurredAt: Date,
   data: JsonRecord,
-): Promise<void> {
+): Promise<boolean> {
   const messageId = data.message_id;
   const contact = data.from;
   const text = data.text;
@@ -91,13 +92,14 @@ async function saveInbound(
   }).catch((error: unknown) => {
     if (!isDuplicateKey(error)) throw error;
   });
+  return inserted;
 }
 
 async function saveStatus(
   workspace: string,
   eventId: string,
   data: JsonRecord,
-): Promise<void> {
+): Promise<{ contact: string; status: string } | undefined> {
   const clientRef = data.client_ref;
   const status = data.status;
   if (typeof clientRef !== "string" || !["sent", "delivered", "failed"].includes(String(status))) {
@@ -111,12 +113,14 @@ async function saveStatus(
     direction: "outbound",
   });
 
+  let changed = false;
   if (message) {
     const allowedPrevious = status === "sent" ? ["queued"] : ["queued", "sent"];
-    await db.collection("messages").updateOne(
+    const update = await db.collection("messages").updateOne(
       { _id: message._id, status: { $in: allowedPrevious } },
       { $set: { status, statusUpdatedAt: new Date() } },
     );
+    changed = update.modifiedCount > 0;
   }
 
   await db.collection("webhook_events").insertOne({
@@ -127,6 +131,9 @@ async function saveStatus(
   }).catch((error: unknown) => {
     if (!isDuplicateKey(error)) throw error;
   });
+  return changed && typeof message?.contact === "string"
+    ? { contact: message.contact, status: String(status) }
+    : undefined;
 }
 
 export const pigeonWebhook: RequestHandler = async (req, res, next) => {
@@ -178,9 +185,24 @@ export const pigeonWebhook: RequestHandler = async (req, res, next) => {
       }
 
       if (event.type === "message.inbound") {
-        await saveInbound(workspace, eventId, occurredAt, event.data);
+        const inserted = await saveInbound(workspace, eventId, occurredAt, event.data);
+        if (inserted) {
+          await publishWorkspaceEvent(workspace, {
+            type: "message.inbound",
+            contact: event.data.from,
+            message_id: event.data.message_id,
+          });
+        }
       } else {
-        await saveStatus(workspace, eventId, event.data);
+        const update = await saveStatus(workspace, eventId, event.data);
+        if (update) {
+          await publishWorkspaceEvent(workspace, {
+            type: "message.status",
+            contact: update.contact,
+            client_ref: event.data.client_ref,
+            status: update.status,
+          });
+        }
       }
     } else {
       await db.collection("webhook_events").insertOne({
